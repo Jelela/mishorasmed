@@ -90,7 +90,13 @@ export default function OnboardingPage() {
       return;
     }
 
-    setUserHospitals(data || []);
+    // Convertir hospital de objeto único a array (Supabase devuelve objeto único en join)
+    const userHospitalsData: UserHospital[] = (data || []).map((uh: any) => ({
+      ...uh,
+      hospital: Array.isArray(uh.hospital) ? uh.hospital : (uh.hospital ? [uh.hospital] : []),
+    }));
+
+    setUserHospitals(userHospitalsData);
   }
 
   async function addHospital(hospitalId: string) {

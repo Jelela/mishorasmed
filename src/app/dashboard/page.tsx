@@ -358,7 +358,10 @@ export default function DashboardPage() {
 
     // Agrupar actos y grupos por hospital
     const hospitalsWithActsData: HospitalWithActs[] = hospitalsData.map((uh) => {
-      const hospital = uh.hospital?.[0];
+      // Supabase devuelve hospital como objeto único en el join, convertir a array
+      const hospitalObj = Array.isArray(uh.hospital) ? uh.hospital[0] : uh.hospital;
+      const hospitalArray = hospitalObj ? [hospitalObj] : [];
+      
       const acts = (actsData || []).filter(
         (act) => act.user_hospital_id === uh.id
       );
@@ -367,7 +370,7 @@ export default function DashboardPage() {
       );
 
       // Debug: mostrar grupos y asignaciones
-      console.log(`Hospital: ${hospital?.name || 'N/A'}`);
+      console.log(`Hospital: ${hospitalObj?.name || 'N/A'}`);
       console.log(`  Grupos: ${reportGroups.length}`);
       reportGroups.forEach((g) => {
         console.log(`    - ${g.name} (sort: ${g.sort_order})`);
@@ -380,7 +383,7 @@ export default function DashboardPage() {
 
       return {
         ...uh,
-        hospital: uh.hospital, // Mantener el array completo
+        hospital: hospitalArray, // Convertir a array
         acts,
         reportGroups,
       };

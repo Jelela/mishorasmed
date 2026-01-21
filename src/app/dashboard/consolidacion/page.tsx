@@ -123,7 +123,11 @@ export default function ConsolidacionPage() {
       return;
     }
 
-    const hospitalsData = data || [];
+    // Convertir hospital de objeto único a array (Supabase devuelve objeto único en join)
+    const hospitalsData: UserHospital[] = (data || []).map((uh: any) => ({
+      ...uh,
+      hospital: Array.isArray(uh.hospital) ? uh.hospital : (uh.hospital ? [uh.hospital] : []),
+    }));
 
     setHospitals(hospitalsData);
     calculateClosings(hospitalsData);

@@ -169,8 +169,14 @@ export default function CalendarioPage() {
       return;
     }
 
-    setHospitals(data || []);
-    generateClosingEvents(data || []);
+    // Convertir hospital de objeto único a array (Supabase devuelve objeto único en join)
+    const hospitalsData: UserHospital[] = (data || []).map((uh: any) => ({
+      ...uh,
+      hospital: Array.isArray(uh.hospital) ? uh.hospital : (uh.hospital ? [uh.hospital] : []),
+    }));
+
+    setHospitals(hospitalsData);
+    generateClosingEvents(hospitalsData);
   }
 
   function generateClosingEvents(hospitalsData: any[]) {
