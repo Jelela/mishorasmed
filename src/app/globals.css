@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --background: #ffffff;
+  --foreground: #171717;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/* Forzar tema light - remover preferencia dark */
+body {
+  background: url('/background.png') center center / cover no-repeat fixed;
+  background-color: #ffffff; /* Fallback en caso de que la imagen no cargue */
+  color: #171717;
+  font-family: Arial, Helvetica, sans-serif;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Asegurar que el contenido tenga fondo semitransparente para legibilidad */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.05); /* Overlay muy sutil para no opacar demasiado el fondo */
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Asegurar que el contenido esté por encima del fondo */
+html {
+  position: relative;
+  z-index: 1;
+}
+
+/* Ocultar scrollbar pero mantener funcionalidad */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
