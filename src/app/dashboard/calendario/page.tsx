@@ -20,10 +20,8 @@ interface CalendarEntry {
   total_amount: number | null;
   calculation_detail: any | null;
   hospital?: {
-    hospital?: {
-      name: string;
-    };
-  };
+    name: string;
+  } | null;
   act?: {
     name: string;
     unit_type: string;
@@ -446,13 +444,24 @@ export default function CalendarioPage() {
       return;
     }
 
-    const processedEntries = (data || []).map((entry: any) => ({
-      ...entry,
-      hospital: Array.isArray(entry.hospital?.hospital)
-        ? entry.hospital.hospital[0]
-        : entry.hospital?.hospital,
-      act: entry.act,
-    }));
+    const processedEntries = (data || []).map((entry: any) => {
+      // Normalizar hospital: puede venir como entry.hospital.hospital (objeto o array)
+      let hospitalData = null;
+      if (entry.hospital?.hospital) {
+        hospitalData = Array.isArray(entry.hospital.hospital) 
+          ? entry.hospital.hospital[0] 
+          : entry.hospital.hospital;
+      } else if (entry.hospital?.name) {
+        // Ya está normalizado (caso de producción)
+        hospitalData = entry.hospital;
+      }
+      
+      return {
+        ...entry,
+        hospital: hospitalData,
+        act: entry.act,
+      };
+    });
 
     setEntries(processedEntries);
   }
@@ -1033,14 +1042,10 @@ export default function CalendarioPage() {
           const endTimeStr = `${String(entryEndTime.hours).padStart(2, "0")}:${String(entryEndTime.minutes).padStart(2, "0")}`;
           
           // Obtener nombre del hospital
-          // La estructura de Supabase es: entry.hospital.hospital.name
+          // Después del procesamiento en loadEntries(), entry.hospital es directamente el objeto del hospital
           let hospitalName = "Hospital desconocido";
-          if (entry.hospital?.hospital) {
-            if (Array.isArray(entry.hospital.hospital)) {
-              hospitalName = entry.hospital.hospital[0]?.name || "Hospital desconocido";
-            } else if (entry.hospital.hospital.name) {
-              hospitalName = entry.hospital.hospital.name;
-            }
+          if (entry.hospital?.name) {
+            hospitalName = entry.hospital.name;
           }
           const actName = entry.act?.name || "Sin nombre";
 

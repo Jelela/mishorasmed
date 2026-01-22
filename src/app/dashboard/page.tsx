@@ -357,9 +357,34 @@ export default function DashboardPage() {
     }
 
     // Agrupar actos y grupos por hospital
-    const hospitalsWithActsData: HospitalWithActs[] = hospitalsData.map((uh) => {
-      // Supabase devuelve hospital como objeto único en el join, convertir a array
-      const hospitalObj = Array.isArray(uh.hospital) ? uh.hospital[0] : uh.hospital;
+    const hospitalsWithActsData: HospitalWithActs[] = hospitalsData.map((uh: any) => {
+      // Normalizar hospital: Supabase puede devolver como objeto único o array
+      let hospitalObj = null;
+      
+      // Debug: ver qué estructura tiene
+      console.log('Processing hospital data:', {
+        id: uh.id,
+        hospital: uh.hospital,
+        isArray: Array.isArray(uh.hospital),
+        type: typeof uh.hospital
+      });
+      
+      if (uh.hospital) {
+        if (Array.isArray(uh.hospital)) {
+          hospitalObj = uh.hospital[0] || null;
+        } else if (uh.hospital && typeof uh.hospital === 'object') {
+          // Ya es un objeto único
+          hospitalObj = uh.hospital;
+        }
+      }
+      
+      // Debug: verificar resultado
+      console.log('Normalized hospital:', {
+        id: uh.id,
+        hospitalObj: hospitalObj,
+        name: hospitalObj?.name
+      });
+      
       const hospitalArray = hospitalObj ? [hospitalObj] : [];
       
       const acts = (actsData || []).filter(
