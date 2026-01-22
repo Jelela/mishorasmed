@@ -15,7 +15,7 @@ export function BottomNavigation() {
   ];
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-40">
+    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-sm border-t border-gray-200 z-40 bottom-nav">
       {/* Mobile: slider horizontal */}
       <div className="sm:hidden overflow-x-auto scrollbar-hide">
         <div className="flex items-center h-16 gap-2 px-2 snap-x snap-mandatory min-w-max">

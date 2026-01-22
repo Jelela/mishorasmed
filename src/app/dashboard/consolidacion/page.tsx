@@ -1157,20 +1157,39 @@ export default function ConsolidacionPage() {
           if (!closing || !closing.closureId) return null;
 
           return (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => {
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-0 sm:p-4" onClick={() => {
               setEditingPeriod(null);
               setEditPeriodStart("");
               setEditPeriodEnd("");
               setEditAdjustReason("");
             }}>
               <div 
-                className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6"
+                className="bg-white rounded-none sm:rounded-2xl shadow-2xl max-w-md w-full h-full sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
               >
-                <h3 className="text-xl font-semibold text-gray-900 mb-4">
-                  Editar período
-                </h3>
-                <div className="space-y-4">
+                {/* Header */}
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900">
+                    Editar período
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setEditingPeriod(null);
+                      setEditPeriodStart("");
+                      setEditPeriodEnd("");
+                      setEditAdjustReason("");
+                    }}
+                    className="p-1.5 sm:p-2 hover:bg-gray-100 rounded-full transition-colors"
+                    disabled={savingPeriod === editingPeriod}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5 text-gray-500">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 pb-20 sm:pb-6 space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Desde <span className="text-red-500">*</span>
@@ -1208,27 +1227,29 @@ export default function ConsolidacionPage() {
                       disabled={savingPeriod === editingPeriod}
                     />
                   </div>
-                  <div className="flex gap-3 pt-4">
-                    <button
-                      onClick={() => savePeriodEdit(editingPeriod, closing.closureId!)}
-                      disabled={savingPeriod === editingPeriod || !editPeriodStart || !editPeriodEnd}
-                      className="flex-1 rounded-lg bg-black text-white px-4 py-2 text-sm font-medium hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {savingPeriod === editingPeriod ? "Guardando..." : "Guardar"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setEditingPeriod(null);
-                        setEditPeriodStart("");
-                        setEditPeriodEnd("");
-                        setEditAdjustReason("");
-                      }}
-                      disabled={savingPeriod === editingPeriod}
-                      className="flex-1 rounded-lg border-2 border-black text-gray-900 px-4 py-2 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-60"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
+                </div>
+
+                {/* Footer */}
+                <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-end gap-2 sm:gap-3 flex-shrink-0 bg-white">
+                  <button
+                    onClick={() => {
+                      setEditingPeriod(null);
+                      setEditPeriodStart("");
+                      setEditPeriodEnd("");
+                      setEditAdjustReason("");
+                    }}
+                    disabled={savingPeriod === editingPeriod}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => savePeriodEdit(editingPeriod, closing.closureId!)}
+                    disabled={savingPeriod === editingPeriod || !editPeriodStart || !editPeriodEnd}
+                    className="px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    {savingPeriod === editingPeriod ? "Guardando..." : "Guardar"}
+                  </button>
                 </div>
               </div>
             </div>

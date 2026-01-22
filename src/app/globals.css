@@ -50,3 +50,14 @@ html {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* Ocultar BottomNavigation en mobile cuando hay un modal abierto */
+body.modal-open .bottom-nav {
+  display: none !important;
+}
+
+@media (min-width: 640px) {
+  body.modal-open .bottom-nav {
+    display: block !important;
+  }
+}

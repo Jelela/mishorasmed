@@ -1127,7 +1127,7 @@ export default function DashboardPage() {
                     </div>
 
                     {/* Actos del hospital */}
-                    <div className="mb-4 min-w-0">
+                    <div className="mb-4 min-w-0 relative">
                       <button
                         onClick={() => {
                           setExpandedSections({
@@ -1199,7 +1199,7 @@ export default function DashboardPage() {
 
                       {/* Formulario para agregar acto - dentro de la sección de actos */}
                       {isFormOpen && (
-                        <div className="mt-5 pt-5 border-t-2 border-black space-y-3 sm:space-y-4 min-w-0">
+                        <div className="mt-5 pt-5 border-t-2 border-black space-y-3 sm:space-y-4 min-w-0 pb-24 sm:pb-4">
                         {/* Tipo de acto */}
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">
@@ -1350,19 +1350,19 @@ export default function DashboardPage() {
                           </div>
                         )}
 
-                        {/* Botones */}
-                        <div className="flex gap-2 sm:gap-3 flex-wrap sm:flex-nowrap">
+                        {/* Botones - siempre visibles */}
+                        <div className="flex gap-2 sm:gap-3 flex-wrap sm:flex-nowrap pt-4 pb-2 border-t border-gray-200 mt-4 bg-white sticky bottom-0 z-10">
                           <button
                             onClick={() => saveAct(hospitalData.id)}
                             disabled={isSaving}
-                            className="flex-1 min-w-0 rounded-lg bg-black text-white font-medium py-2 sm:py-2.5 text-sm hover:bg-gray-800 disabled:opacity-60 transition-colors shadow-sm"
+                            className="flex-1 min-w-0 rounded-lg bg-black text-white font-medium py-2.5 sm:py-2.5 text-sm hover:bg-gray-800 disabled:opacity-60 transition-colors shadow-sm"
                           >
                             {isSaving ? "Guardando…" : "Guardar"}
                           </button>
                           <button
                             onClick={closeAddForm}
                             disabled={isSaving}
-                            className="flex-1 sm:flex-none px-4 sm:px-6 py-2 sm:py-2.5 rounded-lg border-2 border-black text-gray-900 hover:bg-gray-50 disabled:opacity-60 transition-colors font-medium text-sm"
+                            className="flex-1 sm:flex-none px-4 sm:px-6 py-2.5 sm:py-2.5 rounded-lg border-2 border-black text-gray-900 hover:bg-gray-50 disabled:opacity-60 transition-colors font-medium text-sm"
                           >
                             Cancelar
                           </button>
@@ -1599,22 +1599,24 @@ export default function DashboardPage() {
 
         {/* Modal de edición de acto */}
         {editingAct && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-              <div className="flex items-center justify-between mb-4 sm:mb-6">
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-0 sm:p-4">
+            <div className="bg-white rounded-none sm:rounded-lg shadow-xl max-w-2xl w-full h-full sm:h-auto sm:max-h-[90vh] overflow-hidden flex flex-col">
+              {/* Header */}
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between flex-shrink-0">
                 <h2 className="text-lg sm:text-xl font-semibold text-gray-900">Editar Acto Médico</h2>
                 <button
                   onClick={closeEditActModal}
-                  className="text-gray-500 hover:text-gray-700 transition-colors"
+                  className="text-gray-500 hover:text-gray-700 transition-colors p-1.5 sm:p-2 hover:bg-gray-100 rounded-full"
                   disabled={updatingAct}
                 >
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 sm:h-6 sm:w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                   </svg>
                 </button>
               </div>
 
-              <div className="space-y-4 sm:space-y-6">
+              {/* Content */}
+              <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 sm:py-6 pb-20 sm:pb-6 space-y-4 sm:space-y-6">
                 {/* Nombre del acto */}
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
@@ -1764,23 +1766,24 @@ export default function DashboardPage() {
                   ) : null;
                 })()}
 
-                {/* Botones */}
-                <div className="flex gap-3 sm:gap-4 pt-4 border-t border-gray-200">
-                  <button
-                    onClick={handleSaveEditedAct}
-                    disabled={updatingAct}
-                    className="flex-1 rounded-lg bg-black text-white font-medium py-2 sm:py-2.5 text-sm hover:bg-gray-800 disabled:opacity-60 transition-colors shadow-sm"
-                  >
-                    {updatingAct ? "Guardando..." : "Guardar cambios"}
-                  </button>
-                  <button
-                    onClick={closeEditActModal}
-                    disabled={updatingAct}
-                    className="flex-1 sm:flex-none px-6 py-2 sm:py-2.5 rounded-lg border-2 border-black text-gray-900 hover:bg-gray-50 disabled:opacity-60 transition-colors font-medium text-sm"
-                  >
-                    Cancelar
-                  </button>
-                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-end gap-2 sm:gap-3 flex-shrink-0 bg-white">
+                <button
+                  onClick={closeEditActModal}
+                  disabled={updatingAct}
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveEditedAct}
+                  disabled={updatingAct}
+                  className="px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-black text-white rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                >
+                  {updatingAct ? "Guardando..." : "Guardar cambios"}
+                </button>
               </div>
             </div>
           </div>
