@@ -656,17 +656,65 @@ export default function ConsolidacionPage() {
     }
   }
 
+  // Extraer fecha de un timestamp sin conversión de zona horaria
+  function extractDateFromTimestamp(timestamp: string | null | undefined): string {
+    if (!timestamp) return "";
+    const parts = timestamp.split("T");
+    return parts[0] || "";
+  }
+
+  // Extraer hora y minuto de un timestamp sin conversión de zona horaria
+  function extractTimeFromTimestamp(timestamp: string | null | undefined): { hours: number; minutes: number } {
+    if (!timestamp) return { hours: 0, minutes: 0 };
+    const match = timestamp.match(/T(\d{2}):(\d{2}):(\d{2})/);
+    if (!match) return { hours: 0, minutes: 0 };
+    return { hours: parseInt(match[1], 10), minutes: parseInt(match[2], 10) };
+  }
+
+  // Formatear fecha sin conversión de zona horaria
+  function formatDateSafe(dateString: string | null): string {
+    if (!dateString) return "";
+    
+    // Si es un timestamp, extraer solo la parte de fecha
+    let datePart = dateString;
+    if (dateString.includes("T")) {
+      datePart = extractDateFromTimestamp(dateString);
+    }
+    
+    // Parsear directamente sin conversión de zona horaria
+    const [year, month, day] = datePart.split("-").map(Number);
+    
+    // Formatear directamente sin usar Date para evitar conversión de zona horaria
+    const monthNames = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+    return `${day} de ${monthNames[month - 1]} de ${year}`;
+  }
+
   function formatTime(dateString: string | null): string {
     if (!dateString) return "";
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" });
+    const time = extractTimeFromTimestamp(dateString);
+    const period = time.hours >= 12 ? "p. m." : "a. m.";
+    const displayHour = time.hours === 0 ? 12 : time.hours > 12 ? time.hours - 12 : time.hours;
+    const displayMinute = String(time.minutes).padStart(2, "0");
+    return `${String(displayHour).padStart(2, "0")}:${displayMinute} ${period}`;
   }
 
   function calculateHours(startAt: string | null, endAt: string | null, quantity: number): number {
     if (startAt && endAt) {
-      const start = new Date(startAt);
-      const end = new Date(endAt);
-      return (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+      // Parsear como naive timestamps para evitar conversión de zona horaria
+      const startTime = extractTimeFromTimestamp(startAt);
+      const endTime = extractTimeFromTimestamp(endAt);
+      
+      // Calcular diferencia en minutos
+      const startMinutes = startTime.hours * 60 + startTime.minutes;
+      const endMinutes = endTime.hours * 60 + endTime.minutes;
+      
+      // Si end es menor que start, asumir que cruza medianoche
+      let diffMinutes = endMinutes - startMinutes;
+      if (diffMinutes < 0) {
+        diffMinutes += 24 * 60; // Agregar 24 horas
+      }
+      
+      return diffMinutes / 60;
     }
     return quantity;
   }
@@ -846,11 +894,7 @@ export default function ConsolidacionPage() {
                                                 className="text-xs sm:text-sm text-gray-700 bg-white rounded p-2 border border-gray-200"
                                               >
                                                 <div className="font-medium">
-                                                  {new Date(entry.date).toLocaleDateString("es-AR", {
-                                                    day: "numeric",
-                                                    month: "short",
-                                                    year: "numeric",
-                                                  })}
+                                                  {formatDateSafe(entry.start_at || entry.date)}
                                                 </div>
                                                 <div className="text-gray-600 mt-1">
                                                   {entry.start_at && entry.end_at ? (
@@ -1090,11 +1134,7 @@ export default function ConsolidacionPage() {
                                                   className="text-xs sm:text-sm text-gray-700 bg-white rounded p-2 border border-gray-200"
                                                 >
                                                   <div className="font-medium">
-                                                    {new Date(entry.date).toLocaleDateString("es-AR", {
-                                                      day: "numeric",
-                                                      month: "short",
-                                                      year: "numeric",
-                                                    })}
+                                                    {formatDateSafe(entry.start_at || entry.date)}
                                                   </div>
                                                   <div className="text-gray-600 mt-1">
                                                     {entry.start_at && entry.end_at ? (
