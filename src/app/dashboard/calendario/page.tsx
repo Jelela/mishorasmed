@@ -94,7 +94,15 @@ export default function CalendarioPage() {
 
   // Estados del formulario
   const [selectedHospitalId, setSelectedHospitalId] = useState("");
-  const [selectedActId, setSelectedActId] = useState("");
+  const [selectedActIds, setSelectedActIds] = useState<string[]>([]);
+  const [actDetails, setActDetails] = useState<Record<string, {
+    patientsCount: string;
+    role: "principal" | "assistant" | null;
+    quantity: string; // Solo para unidades "cantidad"
+    notes: string;
+  }>>({});
+  
+  // Estados legacy para compatibilidad (se usarán solo cuando hay 1 acto)
   const [notes, setNotes] = useState("");
   const [patientsCount, setPatientsCount] = useState<string>("");
   const [selectedRole, setSelectedRole] = useState<"principal" | "assistant" | null>(null);
@@ -119,6 +127,32 @@ export default function CalendarioPage() {
   // Estados para detección de swipe (solo mobile, vista semanal)
   const touchStartX = useRef<number | null>(null);
   const touchStartY = useRef<number | null>(null);
+
+  // Sincronizar estados legacy con actDetails cuando hay 1 acto
+  useEffect(() => {
+    if (selectedActIds.length === 1) {
+      const actId = selectedActIds[0];
+      const details = actDetails[actId];
+      if (details) {
+        // Solo actualizar si hay diferencia para evitar loops infinitos
+        if (details.notes !== undefined && details.notes !== notes) {
+          setNotes(details.notes);
+        }
+        if (details.patientsCount !== undefined && details.patientsCount !== patientsCount) {
+          setPatientsCount(details.patientsCount);
+        }
+        if (details.role !== undefined && details.role !== selectedRole) {
+          setSelectedRole(details.role);
+        }
+      }
+    } else if (selectedActIds.length === 0) {
+      // Limpiar estados legacy cuando no hay actos
+      if (notes !== "") setNotes("");
+      if (patientsCount !== "") setPatientsCount("");
+      if (selectedRole !== null) setSelectedRole(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedActIds, actDetails]);
 
   useEffect(() => {
     (async () => {
@@ -413,7 +447,8 @@ export default function CalendarioPage() {
     }
 
     setActs(data || []);
-    setSelectedActId("");
+    setSelectedActIds([]);
+    setActDetails({});
   }
 
   async function loadEntries() {
@@ -774,7 +809,8 @@ export default function CalendarioPage() {
     setModalEndHour(null);
     setModalEndMinute(null);
     setSelectedHospitalId("");
-    setSelectedActId("");
+    setSelectedActIds([]);
+    setActDetails({});
     setNotes("");
     setError(null);
     setShowEntryModal(true);
@@ -788,7 +824,8 @@ export default function CalendarioPage() {
     setModalEndHour(null);
     setModalEndMinute(null);
     setSelectedHospitalId("");
-    setSelectedActId("");
+    setSelectedActIds([]);
+    setActDetails({});
     setNotes("");
     setPatientsCount("");
     setSelectedRole(null);
@@ -816,18 +853,24 @@ export default function CalendarioPage() {
     setModalEndHour(endTime.hours);
     setModalEndMinute(endTime.minutes);
     
-    // Establecer hospital y acto
+    // Establecer hospital y acto (solo uno en edición)
     setSelectedHospitalId(entry.user_hospital_id);
     await loadActs(entry.user_hospital_id);
-    setSelectedActId(entry.act_id);
+    setSelectedActIds([entry.act_id]);
     
-    // Establecer notas
+    // Establecer detalles del acto
+    setActDetails({
+      [entry.act_id]: {
+        patientsCount: entry.patients_count?.toString() || "",
+        role: entry.role || null,
+        quantity: entry.quantity.toString(),
+        notes: entry.notes || ""
+      }
+    });
+    
+    // Establecer valores legacy para compatibilidad (cuando hay 1 acto)
     setNotes(entry.notes || "");
-    
-    // Establecer patients_count si existe
     setPatientsCount(entry.patients_count?.toString() || "");
-    
-    // Establecer role si existe
     setSelectedRole(entry.role || null);
     
     // Marcar que estamos editando
@@ -836,23 +879,8 @@ export default function CalendarioPage() {
   }
 
   async function handleSaveEntry() {
-    if (!selectedHospitalId || !selectedActId) {
-      setError("Seleccioná un hospital y un acto médico");
-      return;
-    }
-
-    // Validar rol si el acto soporta roles
-    const selectedAct = acts.find(a => a.id === selectedActId);
-    // Verificar supports_roles
-    const supportsRoles = selectedAct?.supports_roles === true;
-    
-    // Debug: mostrar en consola
-    if (selectedAct) {
-      console.log("handleSaveEntry - Selected act:", selectedAct.name, "supports_roles:", selectedAct.supports_roles, "type:", typeof selectedAct.supports_roles, "supportsRoles result:", supportsRoles);
-    }
-    
-    if (supportsRoles && !selectedRole) {
-      setError("Seleccioná un rol (Principal o Ayudante)");
+    if (!selectedHospitalId || selectedActIds.length === 0) {
+      setError("Seleccioná un hospital y al menos un acto médico");
       return;
     }
 
@@ -888,55 +916,86 @@ export default function CalendarioPage() {
     const start_at = formatTimestamp(startDate);
     const end_at = formatTimestamp(endDate);
     const date = formatDate(startDate);
-    const quantity = calculateHours(start_at, end_at);
 
-    // Determinar patients_count: solo si el acto requiere pacientes y hay valor
-    // selectedAct y supportsRoles ya están declarados arriba
-    let finalPatientsCount: number | null = null;
-    if (selectedAct?.requires_patients === true && patientsCount.trim() !== "") {
-      const count = parseInt(patientsCount);
-      if (!isNaN(count) && count >= 0) {
-        finalPatientsCount = count;
-      }
-    }
-
-    // Determinar role, total_amount y calculation_detail si el acto soporta roles
-    let finalRole: "principal" | "assistant" | null = null;
-    let totalAmount: number | null = null;
-    let calculationDetail: any | null = null;
-    
-    if (supportsRoles && selectedRole && selectedAct) {
-      finalRole = selectedRole;
-      const unitValue = selectedRole === "principal" 
-        ? selectedAct.unit_value_principal 
-        : selectedAct.unit_value_assistant;
-      if (unitValue !== null && unitValue !== undefined) {
-        totalAmount = quantity * unitValue;
-        calculationDetail = {
-          role: selectedRole,
-          rate: unitValue,
-          quantity: quantity,
-          total: totalAmount
-        };
-      } else {
-        setError(`Falta definir el valor para el rol ${selectedRole === "principal" ? "principal" : "ayudante"}`);
+    // Si estamos editando, solo actualizar el entry existente
+    if (editingEntry) {
+      if (selectedActIds.length !== 1) {
+        setError("Al editar, solo podés modificar un acto a la vez");
         return;
       }
-    }
 
-    let error;
-    if (editingEntry) {
+      const actId = selectedActIds[0];
+      const act = acts.find(a => a.id === actId);
+      if (!act) {
+        setError("Acto no encontrado");
+        return;
+      }
+
+      const details = actDetails[actId] || {};
+      const supportsRoles = act.supports_roles === true;
+
+      // Validaciones
+      if (supportsRoles && !details.role) {
+        setError("Seleccioná un rol (Principal o Ayudante)");
+        return;
+      }
+
+      // Calcular quantity según tipo de unidad
+      let quantity: number;
+      if (act.unit_type === "hours") {
+        quantity = calculateHours(start_at, end_at);
+      } else {
+        // units/cantidad
+        quantity = parseFloat(details.quantity || "1");
+        if (isNaN(quantity) || quantity <= 0) {
+          setError("La cantidad debe ser mayor a 0");
+          return;
+        }
+      }
+
+      // Determinar patients_count
+      let finalPatientsCount: number | null = null;
+      if (act.requires_patients === true && details.patientsCount.trim() !== "") {
+        const count = parseInt(details.patientsCount);
+        if (!isNaN(count) && count >= 0) {
+          finalPatientsCount = count;
+        }
+      }
+
+      // Determinar role, total_amount y calculation_detail
+      let finalRole: "principal" | "assistant" | null = null;
+      let totalAmount: number | null = null;
+      let calculationDetail: any | null = null;
+      
+      if (supportsRoles && details.role) {
+        finalRole = details.role;
+        const unitValue = details.role === "principal" 
+          ? act.unit_value_principal 
+          : act.unit_value_assistant;
+        // Si hay valor definido, calcular total_amount. Si no, dejar en null (no es obligatorio)
+        if (unitValue !== null && unitValue !== undefined) {
+          totalAmount = quantity * unitValue;
+          calculationDetail = {
+            role: details.role,
+            rate: unitValue,
+            quantity: quantity,
+            total: totalAmount
+          };
+        }
+        // Si no hay valor definido, simplemente no calculamos total_amount (se queda en null)
+      }
+
       // Actualizar entrada existente
       const { error: updateError } = await supabase
         .from("entries")
         .update({
           user_hospital_id: selectedHospitalId,
-          act_id: selectedActId,
+          act_id: actId,
           date: date,
           start_at: start_at,
           end_at: end_at,
           quantity: quantity,
-          notes: notes.trim() || null,
+          notes: details.notes?.trim() || null,
           patients_count: finalPatientsCount,
           role: finalRole,
           total_amount: totalAmount,
@@ -944,29 +1003,155 @@ export default function CalendarioPage() {
         })
         .eq("id", editingEntry.id)
         .eq("user_id", user.id);
-      error = updateError;
-    } else {
-      // Crear nueva entrada
-      const { error: insertError } = await supabase.from("entries").insert({
+
+      if (updateError) {
+        console.error("Error al guardar:", updateError);
+        setError("Error al guardar: " + updateError.message);
+        return;
+      }
+
+      await loadEntries();
+      resetModal();
+      return;
+    }
+
+    // Crear múltiples entries (uno por cada acto seleccionado)
+    const entriesToCreate = [];
+    const errors: string[] = [];
+
+    for (const actId of selectedActIds) {
+      const act = acts.find(a => a.id === actId);
+      if (!act) {
+        errors.push(`Acto con ID ${actId} no encontrado`);
+        continue;
+      }
+
+      const details = actDetails[actId] || {};
+      const supportsRoles = act.supports_roles === true;
+
+      // Validaciones específicas por acto
+      if (supportsRoles && !details.role) {
+        errors.push(`${act.name}: Seleccioná un rol (Principal o Ayudante)`);
+        continue;
+      }
+
+      if (act.requires_patients === true && (!details.patientsCount || details.patientsCount.trim() === "")) {
+        errors.push(`${act.name}: Ingresá la cantidad de pacientes`);
+        continue;
+      }
+
+      // Calcular quantity según tipo de unidad
+      let quantity: number;
+      if (act.unit_type === "hours") {
+        quantity = calculateHours(start_at, end_at);
+      } else {
+        // units/cantidad
+        quantity = parseFloat(details.quantity || "1");
+        if (isNaN(quantity) || quantity <= 0) {
+          errors.push(`${act.name}: La cantidad debe ser mayor a 0`);
+          continue;
+        }
+      }
+
+      // Determinar patients_count
+      let finalPatientsCount: number | null = null;
+      if (act.requires_patients === true && details.patientsCount.trim() !== "") {
+        const count = parseInt(details.patientsCount);
+        if (!isNaN(count) && count >= 0) {
+          finalPatientsCount = count;
+        }
+      }
+
+      // Calcular total_amount si tiene roles
+      let totalAmount: number | null = null;
+      let calculationDetail: any | null = null;
+      if (supportsRoles && details.role) {
+        const unitValue = details.role === "principal" 
+          ? act.unit_value_principal 
+          : act.unit_value_assistant;
+        // Si hay valor definido, calcular total_amount. Si no, dejar en null (no es obligatorio)
+        if (unitValue !== null && unitValue !== undefined) {
+          totalAmount = quantity * unitValue;
+          calculationDetail = {
+            role: details.role,
+            rate: unitValue,
+            quantity: quantity,
+            total: totalAmount
+          };
+        }
+        // Si no hay valor definido, simplemente no calculamos total_amount (se queda en null)
+      }
+
+      entriesToCreate.push({
         user_id: user.id,
         user_hospital_id: selectedHospitalId,
-        act_id: selectedActId,
+        act_id: actId,
         date: date,
         start_at: start_at,
         end_at: end_at,
         quantity: quantity,
-        notes: notes.trim() || null,
+        notes: details.notes?.trim() || null,
         patients_count: finalPatientsCount,
-        role: finalRole,
+        role: details.role || null,
         total_amount: totalAmount,
         calculation_detail: calculationDetail,
       });
-      error = insertError;
     }
 
+    if (errors.length > 0) {
+      setError(errors.join(". "));
+      return;
+    }
+
+    if (entriesToCreate.length === 0) {
+      setError("No hay actos válidos para guardar");
+      return;
+    }
+
+    // Crear todos los entries
+    const { error: insertError, data } = await supabase
+      .from("entries")
+      .insert(entriesToCreate)
+      .select();
+
+    if (insertError) {
+      console.error("Error al guardar:", insertError);
+      setError(`Error al guardar: ${insertError.message}`);
+      return;
+    }
+
+    // Si algunos fallaron (aunque debería ser todo o nada)
+    if (data && data.length !== entriesToCreate.length) {
+      setError(`Se guardaron ${data.length} de ${entriesToCreate.length} actos. Revisá los datos.`);
+      return;
+    }
+
+    await loadEntries();
+    resetModal();
+  }
+
+  async function handleDeleteEntry() {
+    if (!editingEntry) return;
+
+    // Confirmar eliminación
+    if (!confirm("¿Estás seguro de que querés eliminar esta entrada?")) {
+      return;
+    }
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return;
+
+    const { error } = await supabase
+      .from("entries")
+      .delete()
+      .eq("id", editingEntry.id)
+      .eq("user_id", user.id);
+
     if (error) {
-      console.error("Error al guardar:", error);
-      setError("Error al guardar: " + error.message);
+      console.error("Error al eliminar:", error);
+      setError("Error al eliminar: " + error.message);
       return;
     }
 
@@ -977,6 +1162,61 @@ export default function CalendarioPage() {
   // Detectar si cruza medianoche cuando se establece la fecha/hora de fin
   const crossesMidnight = modalEndDate && modalStartDate ? !isSameDay(modalStartDate, modalEndDate) : false;
 
+
+  // Función auxiliar para verificar si dos entries se superponen en tiempo
+  function entriesOverlap(entry1: CalendarEntry, entry2: CalendarEntry): boolean {
+    const start1 = new Date(entry1.start_at).getTime();
+    const end1 = new Date(entry1.end_at).getTime();
+    const start2 = new Date(entry2.start_at).getTime();
+    const end2 = new Date(entry2.end_at).getTime();
+    
+    // Se superponen si: start1 < end2 && start2 < end1
+    return start1 < end2 && start2 < end1;
+  }
+
+  // Asignar carriles a entries que se superponen
+  function assignLanes(entries: CalendarEntry[]): Map<string, number> {
+    const laneMap = new Map<string, number>();
+    const lanes: CalendarEntry[][] = [];
+    
+    // Ordenar por start_at, luego por end_at
+    const sortedEntries = [...entries].sort((a, b) => {
+      const startA = new Date(a.start_at).getTime();
+      const startB = new Date(b.start_at).getTime();
+      if (startA !== startB) return startA - startB;
+      const endA = new Date(a.end_at).getTime();
+      const endB = new Date(b.end_at).getTime();
+      return endA - endB;
+    });
+    
+    // Para cada entry, encontrar el primer carril disponible (sin superposición)
+    sortedEntries.forEach((entry) => {
+      let assignedLane = -1;
+      
+      // Buscar un carril donde no haya superposición
+      for (let laneIndex = 0; laneIndex < lanes.length; laneIndex++) {
+        const lane = lanes[laneIndex];
+        const hasOverlap = lane.some((existingEntry) => entriesOverlap(entry, existingEntry));
+        
+        if (!hasOverlap) {
+          assignedLane = laneIndex;
+          break;
+        }
+      }
+      
+      // Si no hay carril disponible, crear uno nuevo
+      if (assignedLane === -1) {
+        assignedLane = lanes.length;
+        lanes.push([]);
+      }
+      
+      // Asignar entry al carril
+      lanes[assignedLane].push(entry);
+      laneMap.set(entry.id, assignedLane);
+    });
+    
+    return laneMap;
+  }
 
   function renderEntriesInSlot(day: Date, hour: number, entries: CalendarEntry[]) {
     const dateStr = formatDate(day);
@@ -1004,130 +1244,176 @@ export default function CalendarioPage() {
       return false;
     });
 
+    if (slotEntries.length === 0) {
+      return null;
+    }
+
+    // Agrupar entries por start_at (mismo horario de inicio)
+    const groupedByStart: Record<string, CalendarEntry[]> = {};
+    slotEntries.forEach((entry) => {
+      const key = entry.start_at;
+      if (!groupedByStart[key]) {
+        groupedByStart[key] = [];
+      }
+      groupedByStart[key].push(entry);
+    });
+
+    // Colores para diferenciar múltiples entries en el mismo horario
+    const entryColors = [
+      { bg: "bg-blue-500", hover: "hover:bg-blue-600" },
+      { bg: "bg-blue-400", hover: "hover:bg-blue-500" },
+      { bg: "bg-blue-600", hover: "hover:bg-blue-700" },
+      { bg: "bg-indigo-500", hover: "hover:bg-indigo-600" },
+      { bg: "bg-indigo-400", hover: "hover:bg-indigo-500" },
+    ];
+
     return (
       <>
-        {slotEntries.map((entry) => {
-          // Extraer directamente del timestamp sin conversión de zona horaria
-          const entryStartTime = extractTimeFromTimestamp(entry.start_at);
-          const entryEndTime = extractTimeFromTimestamp(entry.end_at);
-          const entryStartDate = extractDateFromTimestamp(entry.start_at);
-          const entryEndDate = extractDateFromTimestamp(entry.end_at);
+        {Object.entries(groupedByStart).map(([startAt, groupEntries]) => {
+          // Si hay múltiples entries con el mismo start_at, asignar carriles
+          let laneMap: Map<string, number>;
+          let maxLanes = 1;
           
-          const dayStr = formatDate(day);
-          const crossesMidnight = entryStartDate !== entryEndDate;
-          const isNextDay = entryEndDate === dayStr && entryStartDate !== dayStr;
-          const isStartDay = entryStartDate === dayStr;
-
-          // Calcular posición y altura dentro del slot
-          // El bloque debe extenderse desde donde empieza hasta donde termina
-          let topPercent = 0;
-          let heightInHours = 0; // Duración total en horas
-
-          if (isNextDay) {
-            // Entry empezó el día anterior y termina en este día (00:00)
-            // El bloque empieza desde el inicio del slot (00:00)
-            topPercent = 0;
-            // Altura hasta la hora de fin
-            heightInHours = entryEndTime.hours + (entryEndTime.minutes / 60);
-          } else if (isStartDay && !crossesMidnight) {
-            // Entry completo en el mismo día
-            topPercent = (entryStartTime.minutes / 60) * 100;
-            // Calcular duración total en horas
-            const startMinutes = entryStartTime.hours * 60 + entryStartTime.minutes;
-            const endMinutes = entryEndTime.hours * 60 + entryEndTime.minutes;
-            heightInHours = (endMinutes - startMinutes) / 60;
-          } else if (isStartDay && crossesMidnight) {
-            // Entry empieza en este día y cruza medianoche
-            topPercent = (entryStartTime.minutes / 60) * 100;
-            // Calcular horas hasta el final del día
-            const startMinutes = entryStartTime.hours * 60 + entryStartTime.minutes;
-            const endOfDayMinutes = 24 * 60;
-            heightInHours = (endOfDayMinutes - startMinutes) / 60;
+          if (groupEntries.length > 1) {
+            laneMap = assignLanes(groupEntries);
+            maxLanes = Math.max(...Array.from(laneMap.values())) + 1;
+          } else {
+            laneMap = new Map();
+            laneMap.set(groupEntries[0].id, 0);
           }
-
-          // Convertir altura en horas a porcentaje del slot actual
-          // Pero el bloque se extiende más allá del slot actual
-          const heightPercent = Math.min(100, (heightInHours / 1) * 100); // 1 = 1 hora por slot
-
-          // Formatear hora para mostrar
-          const startTimeStr = `${String(entryStartTime.hours).padStart(2, "0")}:${String(entryStartTime.minutes).padStart(2, "0")}`;
-          const endTimeStr = `${String(entryEndTime.hours).padStart(2, "0")}:${String(entryEndTime.minutes).padStart(2, "0")}`;
           
-          // Obtener nombre del hospital
-          // Después del procesamiento en loadEntries(), entry.hospital es directamente el objeto del hospital
-          let hospitalName = "Hospital desconocido";
-          if (entry.hospital?.name) {
-            hospitalName = entry.hospital.name;
-          }
-          const actName = entry.act?.name || "Sin nombre";
+          return groupEntries.map((entry) => {
+            const laneIndex = laneMap.get(entry.id) || 0;
+            const entryWidth = maxLanes > 1 ? `${100 / maxLanes}%` : "100%";
+            const leftPercent = maxLanes > 1 ? `${(laneIndex * 100) / maxLanes}%` : "0%";
+            // Extraer directamente del timestamp sin conversión de zona horaria
+            const entryStartTime = extractTimeFromTimestamp(entry.start_at);
+            const entryEndTime = extractTimeFromTimestamp(entry.end_at);
+            const entryStartDate = extractDateFromTimestamp(entry.start_at);
+            const entryEndDate = extractDateFromTimestamp(entry.end_at);
+            
+            const dayStr = formatDate(day);
+            const crossesMidnight = entryStartDate !== entryEndDate;
+            const isNextDay = entryEndDate === dayStr && entryStartDate !== dayStr;
+            const isStartDay = entryStartDate === dayStr;
 
-          return (
-            <div
-              key={entry.id}
-              data-entry="true"
-              className={`absolute left-0 right-0 bg-blue-500 text-white text-xs p-1 sm:p-1.5 rounded z-10 cursor-pointer hover:bg-blue-600 pointer-events-auto ${
-                crossesMidnight && isNextDay
-                  ? "border-t-2 border-dashed border-blue-300"
-                  : ""
-              }`}
-              style={{
-                top: `${Math.max(0, topPercent)}%`,
-                // Calcular altura: usar porcentaje si es menos de 1 hora, o altura fija si es más
-                // La altura se ajustará automáticamente por el contenedor (h-12 en mobile, h-16 en desktop)
-                height: heightInHours > 1 
-                  ? `${heightInHours * 3}rem` // Aproximadamente: 3rem = 48px, se ajusta con el contenedor
-                  : `${Math.min(100, Math.max(5, heightPercent))}%`,
-                zIndex: 10,
-              }}
-              title={`${hospitalName} - ${actName} - Desde ${startTimeStr} hasta ${endTimeStr} (${entry.quantity.toFixed(1)}h)`}
-              onClick={(e) => {
-                e.stopPropagation();
-                openEditModal(entry);
-              }}
-            >
-              {crossesMidnight && isStartDay ? (
-                // Evento que cruza medianoche, día de inicio - mostrar info completa
-                <>
-                  <div className="font-semibold truncate text-[10px]">
-                    {hospitalName}
-                  </div>
-                  <div className="font-medium truncate text-[10px] mt-0.5">
-                    {actName}
-                  </div>
-                  <div className="text-[9px] opacity-90 mt-0.5">
-                    {startTimeStr} - {endTimeStr}
-                  </div>
-                </>
-              ) : crossesMidnight && isNextDay ? (
-                // Evento que cruza medianoche, día siguiente - mostrar indicador
-                <>
-                  <div className="font-semibold truncate text-[10px]">
-                    {hospitalName}
-                  </div>
-                  <div className="font-medium truncate text-[10px] mt-0.5">
-                    {actName}
-                  </div>
-                  <div className="text-[9px] opacity-75 mt-0.5 italic">
-                    (continúa)
-                  </div>
-                </>
-              ) : (
-                // Evento normal (no cruza medianoche) - mostrar Hospital, Acto y Horas
-                <>
-                  <div className="font-semibold truncate text-[10px]">
-                    {hospitalName}
-                  </div>
-                  <div className="font-medium truncate text-[10px] mt-0.5">
-                    {actName}
-                  </div>
-                  <div className="text-[9px] opacity-90 mt-0.5">
-                    {startTimeStr} - {endTimeStr}
-                  </div>
-                </>
-              )}
-            </div>
-          );
-        })}
+            // Calcular posición y altura dentro del slot
+            // El bloque debe extenderse desde donde empieza hasta donde termina
+            let topPercent = 0;
+            let heightInHours = 0; // Duración total en horas
+
+            if (isNextDay) {
+              // Entry empezó el día anterior y termina en este día (00:00)
+              // El bloque empieza desde el inicio del slot (00:00)
+              topPercent = 0;
+              // Altura hasta la hora de fin
+              heightInHours = entryEndTime.hours + (entryEndTime.minutes / 60);
+            } else if (isStartDay && !crossesMidnight) {
+              // Entry completo en el mismo día
+              topPercent = (entryStartTime.minutes / 60) * 100;
+              // Calcular duración total en horas
+              const startMinutes = entryStartTime.hours * 60 + entryStartTime.minutes;
+              const endMinutes = entryEndTime.hours * 60 + entryEndTime.minutes;
+              heightInHours = (endMinutes - startMinutes) / 60;
+            } else if (isStartDay && crossesMidnight) {
+              // Entry empieza en este día y cruza medianoche
+              topPercent = (entryStartTime.minutes / 60) * 100;
+              // Calcular horas hasta el final del día
+              const startMinutes = entryStartTime.hours * 60 + entryStartTime.minutes;
+              const endOfDayMinutes = 24 * 60;
+              heightInHours = (endOfDayMinutes - startMinutes) / 60;
+            }
+
+            // Convertir altura en horas a porcentaje del slot actual
+            // Pero el bloque se extiende más allá del slot actual
+            const heightPercent = Math.min(100, (heightInHours / 1) * 100); // 1 = 1 hora por slot
+
+            // Formatear hora para mostrar
+            const startTimeStr = `${String(entryStartTime.hours).padStart(2, "0")}:${String(entryStartTime.minutes).padStart(2, "0")}`;
+            const endTimeStr = `${String(entryEndTime.hours).padStart(2, "0")}:${String(entryEndTime.minutes).padStart(2, "0")}`;
+            
+            // Obtener nombre del hospital
+            // Después del procesamiento en loadEntries(), entry.hospital es directamente el objeto del hospital
+            let hospitalName = "Hospital desconocido";
+            if (entry.hospital?.name) {
+              hospitalName = entry.hospital.name;
+            }
+            const actName = entry.act?.name || "Sin nombre";
+
+            // Seleccionar color basado en el carril asignado
+            const colorIndex = laneIndex % entryColors.length;
+            const colors = entryColors[colorIndex];
+
+            return (
+              <div
+                key={entry.id}
+                data-entry="true"
+                className={`absolute ${colors.bg} ${colors.hover} text-white text-xs p-1 sm:p-1.5 rounded z-10 cursor-pointer pointer-events-auto ${
+                  crossesMidnight && isNextDay
+                    ? "border-t-2 border-dashed border-blue-300"
+                    : ""
+                } ${maxLanes > 1 ? "border border-white/20" : ""}`}
+                style={{
+                  top: `${Math.max(0, topPercent)}%`,
+                  left: leftPercent,
+                  width: entryWidth,
+                  // Calcular altura: usar porcentaje si es menos de 1 hora, o altura fija si es más
+                  // La altura se ajustará automáticamente por el contenedor (h-12 en mobile, h-16 en desktop)
+                  height: heightInHours > 1 
+                    ? `${heightInHours * 3}rem` // Aproximadamente: 3rem = 48px, se ajusta con el contenedor
+                    : `${Math.min(100, Math.max(5, heightPercent))}%`,
+                  zIndex: 10 + laneIndex, // Entries en diferentes carriles tienen z-index más alto
+                }}
+                title={`${hospitalName} - ${actName} - Desde ${startTimeStr} hasta ${endTimeStr} (${entry.quantity.toFixed(1)}h)`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openEditModal(entry);
+                }}
+              >
+                {crossesMidnight && isStartDay ? (
+                  // Evento que cruza medianoche, día de inicio - mostrar info completa
+                  <>
+                    <div className="font-semibold truncate text-[10px]">
+                      {hospitalName}
+                    </div>
+                    <div className="font-medium truncate text-[10px] mt-0.5">
+                      {actName}
+                    </div>
+                    <div className="text-[9px] opacity-90 mt-0.5">
+                      {startTimeStr} - {endTimeStr}
+                    </div>
+                  </>
+                ) : crossesMidnight && isNextDay ? (
+                  // Evento que cruza medianoche, día siguiente - mostrar indicador
+                  <>
+                    <div className="font-semibold truncate text-[10px]">
+                      {hospitalName}
+                    </div>
+                    <div className="font-medium truncate text-[10px] mt-0.5">
+                      {actName}
+                    </div>
+                    <div className="text-[9px] opacity-75 mt-0.5 italic">
+                      (continúa)
+                    </div>
+                  </>
+                ) : (
+                  // Evento normal (no cruza medianoche) - mostrar Hospital, Acto y Horas
+                  <>
+                    <div className="font-semibold truncate text-[10px]">
+                      {hospitalName}
+                    </div>
+                    <div className="font-medium truncate text-[10px] mt-0.5">
+                      {actName}
+                    </div>
+                    <div className="text-[9px] opacity-90 mt-0.5">
+                      {startTimeStr} - {endTimeStr}
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          });
+        }).flat()}
       </>
     );
   }
@@ -1662,7 +1948,7 @@ export default function CalendarioPage() {
                 {/* Hospitales como chips */}
                 <div>
                   <label className="block text-xs font-medium text-gray-500 mb-1.5 sm:mb-2">
-                    Hospital
+                    ¿En dónde querés registrar la actividad?
                   </label>
                   <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {hospitals.map((h) => {
@@ -1674,11 +1960,13 @@ export default function CalendarioPage() {
                           onClick={() => {
                             if (isSelected) {
                               setSelectedHospitalId("");
-                              setSelectedActId("");
+                              setSelectedActIds([]);
+                              setActDetails({});
                             } else {
                               setSelectedHospitalId(h.id);
                               loadActs(h.id);
-                              setSelectedActId("");
+                              setSelectedActIds([]);
+                              setActDetails({});
                             }
                           }}
                           className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
@@ -1698,34 +1986,35 @@ export default function CalendarioPage() {
                 {selectedHospitalId && (
                   <div>
                     <label className="block text-xs font-medium text-gray-500 mb-1.5 sm:mb-2">
-                      Acto médico
+                      ¿Qué actividad/es querés anotar?
                     </label>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {acts.map((a) => {
-                        const isSelected = selectedActId === a.id;
+                        const isSelected = selectedActIds.includes(a.id);
                         return (
                           <button
                             key={a.id}
                             onClick={() => {
                               if (isSelected) {
-                                setSelectedActId("");
-                                setPatientsCount("");
-                                setSelectedRole(null);
+                                // Remover acto
+                                setSelectedActIds(selectedActIds.filter(id => id !== a.id));
+                                // Limpiar detalles del acto removido
+                                const newDetails = { ...actDetails };
+                                delete newDetails[a.id];
+                                setActDetails(newDetails);
                               } else {
-                                setSelectedActId(a.id);
-                                // Si no requiere pacientes, limpiar patientsCount
-                                if (!a.requires_patients) {
-                                  setPatientsCount("");
-                                }
-                                // Verificar supports_roles
-                                const supportsRoles = a.supports_roles === true;
-                                if (!supportsRoles) {
-                                  setSelectedRole(null);
-                                } else {
-                                  // Si soporta roles, establecer default a "principal"
-                                  setSelectedRole("principal");
-                                  console.log("Acto seleccionado con supports_roles=true, estableciendo rol a 'principal'");
-                                }
+                                // Agregar acto
+                                setSelectedActIds([...selectedActIds, a.id]);
+                                // Inicializar detalles del acto
+                                setActDetails({
+                                  ...actDetails,
+                                  [a.id]: {
+                                    patientsCount: "",
+                                    role: a.supports_roles ? "principal" : null,
+                                    quantity: a.unit_type === "units" ? "1" : "",
+                                    notes: ""
+                                  }
+                                });
                               }
                             }}
                             className={`px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all ${
@@ -1747,9 +2036,9 @@ export default function CalendarioPage() {
                             setNewActUnitType("hours");
                             setNewActUnitValue("");
                           }}
-                          className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-300 border-dashed"
+                          className="px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-all bg-green-100 text-green-700 hover:bg-green-200 border border-green-300"
                         >
-                          + Agregar
+                          Otra actividad
                         </button>
                       )}
                     </div>
@@ -1885,84 +2174,285 @@ export default function CalendarioPage() {
                   </div>
                 )}
 
-                {/* Rol - solo si el acto soporta roles */}
-                {selectedActId && (() => {
-                  const selectedAct = acts.find(a => a.id === selectedActId);
-                  // Verificar si supports_roles es true
-                  const supportsRoles = selectedAct?.supports_roles === true;
-                  // Debug temporal
-                  if (selectedAct) {
-                    console.log("Modal UI - Selected act:", selectedAct.name, "supports_roles:", selectedAct.supports_roles, "type:", typeof selectedAct.supports_roles, "supportsRoles result:", supportsRoles);
-                  }
-                  if (supportsRoles) {
-                    return (
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <label className="text-xs font-medium text-gray-500 whitespace-nowrap">
-                          Rol:
-                        </label>
-                        <div className="relative rounded bg-gray-100 flex-1 max-w-[120px] sm:max-w-none">
-                          <select
-                            value={selectedRole || "principal"}
-                            onChange={(e) => setSelectedRole(e.target.value as "principal" | "assistant" | null)}
-                            className="absolute inset-0 opacity-0 cursor-pointer"
-                            style={{ colorScheme: "light" }}
-                          >
-                            <option value="principal">Principal</option>
-                            <option value="assistant">Ayudante</option>
-                          </select>
-                          <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-700 font-medium pointer-events-none text-center">
-                            {selectedRole === "principal" ? "Principal" : selectedRole === "assistant" ? "Ayudante" : "Principal"}
+                {/* Desglose por acto - solo si hay 2+ actos seleccionados */}
+                {selectedActIds.length >= 2 && (
+                  <div className="space-y-4 mt-4">
+                    <label className="block text-xs font-medium text-gray-500 mb-2">
+                      Desglose por acto
+                    </label>
+                    {selectedActIds.map((actId) => {
+                      const act = acts.find(a => a.id === actId);
+                      if (!act) return null;
+                      const details = actDetails[actId] || {
+                        patientsCount: "",
+                        role: act.supports_roles ? "principal" : null,
+                        quantity: act.unit_type === "units" ? "1" : "",
+                        notes: ""
+                      };
+                      
+                      return (
+                        <div key={actId} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                          <div className="font-medium text-gray-900 mb-3 text-sm">{act.name}</div>
+                          
+                          {/* Si es "cantidad": mostrar Pacientes, Rol, Cantidad */}
+                          {act.unit_type === "units" && (
+                            <>
+                              {/* Pacientes - si requiere */}
+                              {act.requires_patients && (
+                                <div className="mb-3">
+                                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                                    Pacientes
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={details.patientsCount || ""}
+                                    onChange={(e) => {
+                                      const value = e.target.value;
+                                      if (value === "" || (parseInt(value) >= 0)) {
+                                        setActDetails({
+                                          ...actDetails,
+                                          [actId]: { ...details, patientsCount: value }
+                                        });
+                                      }
+                                    }}
+                                    placeholder="0"
+                                    min="0"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                  />
+                                </div>
+                              )}
+                              
+                              {/* Rol - si soporta */}
+                              {act.supports_roles && (
+                                <div className="mb-3">
+                                  <label className="block text-xs font-medium text-gray-500 mb-1">
+                                    Rol
+                                  </label>
+                                  <div className="relative rounded bg-gray-100">
+                                    <select
+                                      value={details.role || "principal"}
+                                      onChange={(e) => setActDetails({
+                                        ...actDetails,
+                                        [actId]: { ...details, role: e.target.value as "principal" | "assistant" }
+                                      })}
+                                      className="absolute inset-0 opacity-0 cursor-pointer"
+                                    >
+                                      <option value="principal">Principal</option>
+                                      <option value="assistant">Ayudante</option>
+                                    </select>
+                                    <div className="px-3 py-1.5 text-sm text-gray-700 font-medium pointer-events-none text-center">
+                                      {details.role === "principal" ? "Principal" : "Ayudante"}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {/* Cantidad (default 1) */}
+                              <div className="mb-3">
+                                <label className="block text-xs font-medium text-gray-500 mb-1">
+                                  Cantidad
+                                </label>
+                                <input
+                                  type="number"
+                                  value={details.quantity || "1"}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === "" || (parseFloat(value) > 0)) {
+                                      setActDetails({
+                                        ...actDetails,
+                                        [actId]: { ...details, quantity: value }
+                                      });
+                                    }
+                                  }}
+                                  min="1"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
+                                />
+                              </div>
+                            </>
+                          )}
+                          
+                          {/* Notas (opcional) - siempre visible */}
+                          <div>
+                            <label className="block text-xs font-medium text-gray-500 mb-1">
+                              ¿Algo más para agregar? (opcional)
+                            </label>
+                            <textarea
+                              value={details.notes || ""}
+                              onChange={(e) => setActDetails({
+                                ...actDetails,
+                                [actId]: { ...details, notes: e.target.value }
+                              })}
+                              rows={2}
+                              placeholder="Nombre del paciente, nro socio, etc..."
+                              className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 resize-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-gray-400"
+                            />
                           </div>
                         </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
+                      );
+                    })}
+                  </div>
+                )}
 
-                {/* Pacientes atendidos - solo si el acto requiere pacientes */}
-                {selectedActId && (() => {
-                  const selectedAct = acts.find(a => a.id === selectedActId);
-                  if (selectedAct?.requires_patients === true) {
-                    return (
-                      <div className="flex items-center gap-1.5 sm:gap-2">
-                        <label className="text-xs font-medium text-gray-500 whitespace-nowrap">
-                          Pacientes:
+                {/* Campos individuales - solo si hay 1 acto seleccionado */}
+                {selectedActIds.length === 1 && (() => {
+                  const actId = selectedActIds[0];
+                  const act = acts.find(a => a.id === actId);
+                  if (!act) return null;
+                  
+                  // Usar actDetails o valores legacy sincronizados
+                  const details = actDetails[actId] || {
+                    patientsCount: patientsCount,
+                    role: selectedRole,
+                    quantity: act.unit_type === "units" ? "1" : "",
+                    notes: notes
+                  };
+                  
+                  return (
+                    <>
+                      {/* Si es "cantidad": mostrar Pacientes, Rol, Cantidad */}
+                      {act.unit_type === "units" && (
+                        <>
+                          {/* Pacientes - si requiere */}
+                          {act.requires_patients && (
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-3">
+                              <label className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                                Pacientes:
+                              </label>
+                              <div className="relative rounded bg-gray-100 flex-1 max-w-[100px] sm:max-w-[150px]">
+                                <input
+                                  type="number"
+                                  value={details.patientsCount || ""}
+                                  onChange={(e) => {
+                                    const value = e.target.value;
+                                    if (value === "" || (parseInt(value) >= 0)) {
+                                      setPatientsCount(value);
+                                      setActDetails({
+                                        ...actDetails,
+                                        [actId]: { ...details, patientsCount: value }
+                                      });
+                                    }
+                                  }}
+                                  placeholder="0"
+                                  min="0"
+                                  className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-700 font-medium bg-transparent outline-none placeholder:text-gray-400 text-center"
+                                />
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Rol - si soporta */}
+                          {act.supports_roles && (
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-3">
+                              <label className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                                Rol:
+                              </label>
+                              <div className="relative rounded bg-gray-100 flex-1 max-w-[120px] sm:max-w-none">
+                                <select
+                                  value={details.role || "principal"}
+                                  onChange={(e) => {
+                                    const newRole = e.target.value as "principal" | "assistant" | null;
+                                    setSelectedRole(newRole);
+                                    setActDetails({
+                                      ...actDetails,
+                                      [actId]: { ...details, role: newRole }
+                                    });
+                                  }}
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                  style={{ colorScheme: "light" }}
+                                >
+                                  <option value="principal">Principal</option>
+                                  <option value="assistant">Ayudante</option>
+                                </select>
+                                <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-700 font-medium pointer-events-none text-center">
+                                  {details.role === "principal" ? "Principal" : details.role === "assistant" ? "Ayudante" : "Principal"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {/* Cantidad (siempre visible para "cantidad") */}
+                          <div className="flex items-center gap-1.5 sm:gap-2 mb-3">
+                            <label className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                              Cantidad:
+                            </label>
+                            <div className="relative rounded bg-gray-100 flex-1 max-w-[100px] sm:max-w-[150px]">
+                              <input
+                                type="number"
+                                value={details.quantity || "1"}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  if (value === "" || (parseFloat(value) > 0)) {
+                                    setActDetails({
+                                      ...actDetails,
+                                      [actId]: { ...details, quantity: value }
+                                    });
+                                  }
+                                }}
+                                min="1"
+                                className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-700 font-medium bg-transparent outline-none placeholder:text-gray-400 text-center"
+                              />
+                            </div>
+                          </div>
+                        </>
+                      )}
+
+                      {/* Si es "horas": mostrar solo Rol (si aplica) */}
+                      {act.unit_type === "hours" && (
+                        <>
+                          {/* Rol - solo si el acto soporta roles */}
+                          {act.supports_roles === true && (
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-3">
+                              <label className="text-xs font-medium text-gray-500 whitespace-nowrap">
+                                Rol:
+                              </label>
+                              <div className="relative rounded bg-gray-100 flex-1 max-w-[120px] sm:max-w-none">
+                                <select
+                                  value={details.role || "principal"}
+                                  onChange={(e) => {
+                                    const newRole = e.target.value as "principal" | "assistant" | null;
+                                    setSelectedRole(newRole);
+                                    setActDetails({
+                                      ...actDetails,
+                                      [actId]: { ...details, role: newRole }
+                                    });
+                                  }}
+                                  className="absolute inset-0 opacity-0 cursor-pointer"
+                                  style={{ colorScheme: "light" }}
+                                >
+                                  <option value="principal">Principal</option>
+                                  <option value="assistant">Ayudante</option>
+                                </select>
+                                <div className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-700 font-medium pointer-events-none text-center">
+                                  {details.role === "principal" ? "Principal" : details.role === "assistant" ? "Ayudante" : "Principal"}
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
+
+                      {/* Notas - siempre visible */}
+                      <div>
+                        <label className="block text-xs font-medium text-gray-500 mb-2">
+                          ¿Algo más para agregar? (opcional)
                         </label>
-                        <div className="relative rounded bg-gray-100 flex-1 max-w-[100px] sm:max-w-[150px]">
-                          <input
-                            type="number"
-                            value={patientsCount}
-                            onChange={(e) => {
-                              const value = e.target.value;
-                              if (value === "" || (parseInt(value) >= 0)) {
-                                setPatientsCount(value);
-                              }
-                            }}
-                            placeholder="0"
-                            min="0"
-                            className="w-full px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm text-gray-700 font-medium bg-transparent outline-none placeholder:text-gray-400 text-center"
-                          />
-                        </div>
+                        <textarea
+                          value={details.notes || ""}
+                          onChange={(e) => {
+                            setNotes(e.target.value);
+                            setActDetails({
+                              ...actDetails,
+                              [actId]: { ...details, notes: e.target.value }
+                            });
+                          }}
+                          rows={2}
+                          placeholder="Nombre del paciente, nro socio, etc..."
+                          className="w-full rounded-lg border border-gray-300 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm outline-none text-gray-900 resize-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-gray-400"
+                        />
                       </div>
-                    );
-                  }
-                  return null;
+                    </>
+                  );
                 })()}
-
-                {/* Notas */}
-                <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-2">
-                    Notas (opcional)
-                  </label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={2}
-                    placeholder="Agregar descripción..."
-                    className="w-full rounded-lg border border-gray-300 px-2 sm:px-3 py-1.5 sm:py-2 text-xs sm:text-sm outline-none text-gray-900 resize-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all placeholder:text-gray-400"
-                  />
-                </div>
 
                 {error && (
                   <div className="p-2 sm:p-3 rounded-lg bg-red-50 border border-red-200 text-red-700 text-xs sm:text-sm">
@@ -1972,31 +2462,53 @@ export default function CalendarioPage() {
               </div>
 
               {/* Footer - SIEMPRE VISIBLE */}
-              <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-end gap-2 sm:gap-3 flex-shrink-0 bg-white">
-                <button
-                  onClick={resetModal}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={handleSaveEntry}
-                  disabled={(() => {
-                    if (!selectedHospitalId || !selectedActId || !modalEndDate || modalEndHour === null || modalEndMinute === null) {
-                      return true;
-                    }
-                    // Validar rol si el acto soporta roles
-                    const selectedAct = acts.find(a => a.id === selectedActId);
-                    const supportsRoles = selectedAct?.supports_roles === true;
-                    if (supportsRoles && !selectedRole) {
-                      return true;
-                    }
-                    return false;
-                  })()}
-                  className="px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
-                >
-                  Guardar
-                </button>
+              <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex items-center justify-between gap-2 sm:gap-3 flex-shrink-0 bg-white">
+                {/* Botón eliminar - solo cuando está editando */}
+                {editingEntry ? (
+                  <button
+                    onClick={handleDeleteEntry}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-red-200"
+                  >
+                    Eliminar
+                  </button>
+                ) : (
+                  <div></div>
+                )}
+                
+                <div className="flex items-center gap-2 sm:gap-3">
+                  <button
+                    onClick={resetModal}
+                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleSaveEntry}
+                    disabled={(() => {
+                      if (!selectedHospitalId || selectedActIds.length === 0 || !modalEndDate || modalEndHour === null || modalEndMinute === null) {
+                        return true;
+                      }
+                      // Si hay múltiples actos, las validaciones se hacen en handleSaveEntry
+                      if (selectedActIds.length > 1) {
+                        return false;
+                      }
+                      // Si hay 1 acto, validar rol si el acto soporta roles
+                      const actId = selectedActIds[0];
+                      const selectedAct = acts.find(a => a.id === actId);
+                      const supportsRoles = selectedAct?.supports_roles === true;
+                      if (supportsRoles) {
+                        const details = actDetails[actId] || {};
+                        if (!details.role) {
+                          return true;
+                        }
+                      }
+                      return false;
+                    })()}
+                    className="px-4 sm:px-6 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed shadow-sm"
+                  >
+                    Guardar
+                  </button>
+                </div>
               </div>
             </div>
           </div>
