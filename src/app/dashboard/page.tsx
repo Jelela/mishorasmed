@@ -1240,10 +1240,10 @@ export default function DashboardPage() {
                           </div>
                         )}
 
-                        {/* Unidad */}
+                        {/* Tipo de registro */}
                         <div>
                           <label className="block text-sm text-gray-600 mb-1">
-                            Unidad
+                            Tipo de registro
                           </label>
                           <select
                             value={unitType}
@@ -1254,7 +1254,7 @@ export default function DashboardPage() {
                             disabled={isSaving}
                           >
                             <option value="hours">Horas</option>
-                            <option value="units">Unidades/Actos</option>
+                            <option value="units">Cantidad</option>
                           </select>
                         </div>
 
@@ -1335,7 +1335,7 @@ export default function DashboardPage() {
                         {!supportsRoles && (
                           <div>
                             <label className="block text-sm text-gray-600 mb-1">
-                              Valor por unidad {unitType === "hours" ? "(opcional)" : ""}
+                              Valor por {unitType === "hours" ? "hora" : "cantidad"} {unitType === "hours" ? "(opcional)" : ""}
                             </label>
                             <input
                               type="number"
@@ -1632,10 +1632,10 @@ export default function DashboardPage() {
                   />
                 </div>
 
-                {/* Tipo de unidad */}
+                {/* Tipo de registro */}
                 <div>
                   <label className="block text-sm text-gray-600 mb-1">
-                    Tipo de unidad <span className="text-red-500">*</span>
+                    Tipo de registro <span className="text-red-500">*</span>
                   </label>
                   <select
                     value={editUnitType}
@@ -1644,7 +1644,7 @@ export default function DashboardPage() {
                     disabled={updatingAct}
                   >
                     <option value="hours">Horas</option>
-                    <option value="units">Unidades/Actos</option>
+                    <option value="units">Cantidad</option>
                   </select>
                 </div>
 
@@ -1724,7 +1724,7 @@ export default function DashboardPage() {
                 {!editSupportsRoles && (
                   <div>
                     <label className="block text-sm text-gray-600 mb-1">
-                      Valor por unidad {editUnitType === "hours" ? "(opcional)" : ""}
+                      Valor por {editUnitType === "hours" ? "hora" : "cantidad"} {editUnitType === "hours" ? "(opcional)" : ""}
                     </label>
                     <input
                       type="number"

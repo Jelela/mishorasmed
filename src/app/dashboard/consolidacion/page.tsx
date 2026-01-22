@@ -807,7 +807,7 @@ export default function ConsolidacionPage() {
                                             {act.actName}
                                           </div>
                                           <div className="text-sm text-gray-600 mt-1">
-                                            {totalHours.toFixed(2)} {act.unitType === "hours" ? "h" : "unidades"}
+                                            {totalHours.toFixed(2)} {act.unitType === "hours" ? "h" : "cantidad"}
                                             {act.totalValue > 0 && (
                                               <span className="ml-2">
                                                 - ${act.totalValue.toFixed(2)}
@@ -860,7 +860,7 @@ export default function ConsolidacionPage() {
                                                     </>
                                                   ) : (
                                                     <>
-                                                      {entry.quantity} {entry.unitType === "hours" ? "h" : "unidades"}
+                                                      {entry.quantity} {entry.unitType === "hours" ? "h" : "cantidad"}
                                                     </>
                                                   )}
                                                 </div>
@@ -1051,7 +1051,7 @@ export default function ConsolidacionPage() {
                                               {act.actName}
                                             </div>
                                             <div className="text-sm text-gray-600 mt-1">
-                                              {totalHours.toFixed(2)} {act.unitType === "hours" ? "h" : "unidades"}
+                                              {totalHours.toFixed(2)} {act.unitType === "hours" ? "h" : "cantidad"}
                                               {act.totalValue > 0 && (
                                                 <span className="ml-2">
                                                   - ${act.totalValue.toFixed(2)}
@@ -1104,7 +1104,7 @@ export default function ConsolidacionPage() {
                                                       </>
                                                     ) : (
                                                       <>
-                                                        {entry.quantity} {entry.unitType === "hours" ? "h" : "unidades"}
+                                                        {entry.quantity} {entry.unitType === "hours" ? "h" : "cantidad"}
                                                       </>
                                                     )}
                                                   </div>

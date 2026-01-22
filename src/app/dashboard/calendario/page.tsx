@@ -1769,7 +1769,7 @@ export default function CalendarioPage() {
                           />
                         </div>
 
-                        {/* Tipo de unidad - recuadro con fondo gris */}
+                        {/* Tipo de registro - recuadro con fondo gris */}
                         <div className="relative rounded bg-gray-100">
                           <select
                             value={newActUnitType}
@@ -1778,14 +1778,14 @@ export default function CalendarioPage() {
                             disabled={savingAct}
                           >
                             <option value="hours">Horas</option>
-                            <option value="units">Unidades</option>
+                            <option value="units">Cantidad</option>
                           </select>
                           <div className="px-3 py-1.5 text-sm text-gray-700 font-medium pointer-events-none min-w-[100px] text-center">
-                            {newActUnitType === "hours" ? "Horas" : "Unidades"}
+                            {newActUnitType === "hours" ? "Horas" : "Cantidad"}
                           </div>
                         </div>
 
-                        {/* Valor por unidad - recuadro con fondo gris (opcional) */}
+                        {/* Valor por cantidad/hora - recuadro con fondo gris (opcional) */}
                         <div className="relative rounded bg-gray-100">
                           <input
                             type="number"
@@ -2088,7 +2088,7 @@ export default function CalendarioPage() {
                                         <td className="px-4 py-2 text-sm text-gray-900">
                                           {actTotal.actName}
                                           <span className="text-xs text-gray-500 ml-2">
-                                            ({actTotal.unitType === "hours" ? "horas" : "unidades"})
+                                            ({actTotal.unitType === "hours" ? "horas" : "cantidad"})
                                           </span>
                                           {actTotal.totalPatients !== null && actTotal.totalPatients > 0 && (
                                             <div className="text-xs text-gray-600 mt-1">
