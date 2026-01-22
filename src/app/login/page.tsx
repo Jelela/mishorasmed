@@ -44,7 +44,7 @@ export default function LoginPage() {
 
       // Redirigir según el estado de onboarding
       if (onboardingCompleted) {
-        router.push("/dashboard");
+        router.push("/dashboard/inicio");
       } else {
         router.push("/onboarding");
       }

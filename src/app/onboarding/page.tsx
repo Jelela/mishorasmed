@@ -44,7 +44,7 @@ export default function OnboardingPage() {
       // Verificar si ya completó onboarding
       const completed = await checkOnboardingStatus(user.id);
       if (completed) {
-        router.replace("/dashboard");
+        router.replace("/dashboard/inicio");
         return;
       }
 
@@ -166,7 +166,7 @@ export default function OnboardingPage() {
         return;
       }
 
-      router.push("/dashboard");
+      router.push("/dashboard/inicio");
     } finally {
       setFinishing(false);
     }

@@ -838,9 +838,13 @@ export default function ConsolidacionPage() {
                               </h3>
                               <div className="space-y-3">
                                 {group.acts.map((act) => {
-                                  const totalHours = act.entries.reduce((sum, e) => {
-                                    return sum + calculateHours(e.start_at, e.end_at, e.quantity);
-                                  }, 0);
+                                  // Para actos de tipo "hours", calcular horas trabajadas
+                                  // Para actos de tipo "units", usar directamente totalQuantity (cantidad)
+                                  const displayValue = act.unitType === "hours" 
+                                    ? act.entries.reduce((sum, e) => {
+                                        return sum + calculateHours(e.start_at, e.end_at, e.quantity);
+                                      }, 0)
+                                    : act.totalQuantity;
                                   const detailsKey = `${closing.id}-${act.actId}`;
                                   const showDetails = expandedDetails.has(detailsKey);
 
@@ -855,7 +859,9 @@ export default function ConsolidacionPage() {
                                             {act.actName}
                                           </div>
                                           <div className="text-sm text-gray-600 mt-1">
-                                            {totalHours.toFixed(2)} {act.unitType === "hours" ? "h" : "cantidad"}
+                                            {act.unitType === "hours" 
+                                              ? `${displayValue.toFixed(2)} h`
+                                              : `${displayValue.toFixed(0)} cantidad`}
                                             {act.totalValue > 0 && (
                                               <span className="ml-2">
                                                 - ${act.totalValue.toFixed(2)}
@@ -900,7 +906,11 @@ export default function ConsolidacionPage() {
                                                   {entry.start_at && entry.end_at ? (
                                                     <>
                                                       {formatTime(entry.start_at)} - {formatTime(entry.end_at)}
-                                                      <span className="ml-2">({hours.toFixed(2)}h)</span>
+                                                      <span className="ml-2">
+                                                        ({entry.unitType === "hours" 
+                                                          ? `${hours.toFixed(2)}h` 
+                                                          : `${entry.quantity.toFixed(0)}`})
+                                                      </span>
                                                     </>
                                                   ) : (
                                                     <>
@@ -1078,9 +1088,13 @@ export default function ConsolidacionPage() {
                                   </div>
                                 <div className="space-y-3">
                                   {group.acts.map((act) => {
-                                    const totalHours = act.entries.reduce((sum, e) => {
-                                      return sum + calculateHours(e.start_at, e.end_at, e.quantity);
-                                    }, 0);
+                                    // Para actos de tipo "hours", calcular horas trabajadas
+                                    // Para actos de tipo "units", usar directamente totalQuantity (cantidad)
+                                    const displayValue = act.unitType === "hours" 
+                                      ? act.entries.reduce((sum, e) => {
+                                          return sum + calculateHours(e.start_at, e.end_at, e.quantity);
+                                        }, 0)
+                                      : act.totalQuantity;
                                     const detailsKey = `${closing.id}-${act.actId}`;
                                     const showDetails = expandedDetails.has(detailsKey);
 
@@ -1095,7 +1109,9 @@ export default function ConsolidacionPage() {
                                               {act.actName}
                                             </div>
                                             <div className="text-sm text-gray-600 mt-1">
-                                              {totalHours.toFixed(2)} {act.unitType === "hours" ? "h" : "cantidad"}
+                                              {act.unitType === "hours" 
+                                                ? `${displayValue.toFixed(2)} h`
+                                                : `${displayValue.toFixed(0)} cantidad`}
                                               {act.totalValue > 0 && (
                                                 <span className="ml-2">
                                                   - ${act.totalValue.toFixed(2)}
@@ -1140,7 +1156,11 @@ export default function ConsolidacionPage() {
                                                     {entry.start_at && entry.end_at ? (
                                                       <>
                                                         {formatTime(entry.start_at)} - {formatTime(entry.end_at)}
-                                                        <span className="ml-2">({hours.toFixed(2)}h)</span>
+                                                        <span className="ml-2">
+                                                          ({entry.unitType === "hours" 
+                                                            ? `${hours.toFixed(2)}h` 
+                                                            : `${entry.quantity.toFixed(0)}`})
+                                                        </span>
                                                       </>
                                                     ) : (
                                                       <>
