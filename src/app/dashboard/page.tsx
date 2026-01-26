@@ -95,6 +95,29 @@ export default function DashboardPage() {
   const [customHospitalClosingDay, setCustomHospitalClosingDay] = useState<string>("");
   const [customHospitalEmail, setCustomHospitalEmail] = useState<string>("");
   const [creatingCustomHospital, setCreatingCustomHospital] = useState(false);
+  
+  // Estados para actos en el formulario de hospital personalizado
+  const [showAddActInHospitalForm, setShowAddActInHospitalForm] = useState(false);
+  const [hospitalFormActs, setHospitalFormActs] = useState<Array<{
+    actType: string;
+    customActName: string;
+    unitType: "hours" | "units";
+    unitValue: string;
+    requiresPatients: boolean;
+    supportsRoles: boolean;
+    unitValuePrincipal: string;
+    unitValueAssistant: string;
+  }>>([]);
+  
+  // Estados del formulario de acto dentro del formulario de hospital
+  const [hospitalFormActType, setHospitalFormActType] = useState<string>("");
+  const [hospitalFormCustomActName, setHospitalFormCustomActName] = useState<string>("");
+  const [hospitalFormUnitType, setHospitalFormUnitType] = useState<"hours" | "units">("hours");
+  const [hospitalFormUnitValue, setHospitalFormUnitValue] = useState<string>("");
+  const [hospitalFormRequiresPatients, setHospitalFormRequiresPatients] = useState<boolean>(false);
+  const [hospitalFormSupportsRoles, setHospitalFormSupportsRoles] = useState<boolean>(false);
+  const [hospitalFormUnitValuePrincipal, setHospitalFormUnitValuePrincipal] = useState<string>("");
+  const [hospitalFormUnitValueAssistant, setHospitalFormUnitValueAssistant] = useState<string>("");
   const [editingGroupFor, setEditingGroupFor] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState<string>("");
   const [creatingGroup, setCreatingGroup] = useState(false);
@@ -179,6 +202,16 @@ export default function DashboardPage() {
     setCustomHospitalName("");
     setCustomHospitalClosingDay("");
     setCustomHospitalEmail("");
+    setHospitalFormActs([]);
+    setShowAddActInHospitalForm(false);
+    setHospitalFormActType("");
+    setHospitalFormCustomActName("");
+    setHospitalFormUnitType("hours");
+    setHospitalFormUnitValue("");
+    setHospitalFormRequiresPatients(false);
+    setHospitalFormSupportsRoles(false);
+    setHospitalFormUnitValuePrincipal("");
+    setHospitalFormUnitValueAssistant("");
   }
 
   async function addHospitalFromModal(hospitalId: string) {
@@ -222,6 +255,93 @@ export default function DashboardPage() {
     } finally {
       setAddingHospital(null);
     }
+  }
+
+  // Funciones para manejar actos en el formulario de hospital
+  function addActToHospitalForm() {
+    // Validar nombre del acto
+    let actName = "";
+    if (hospitalFormActType === "other") {
+      actName = hospitalFormCustomActName.trim();
+      if (!actName) {
+        toast.showToast("Ingresá el nombre del acto", "error");
+        return;
+      }
+    } else if (!hospitalFormActType) {
+      toast.showToast("Seleccioná un tipo de acto", "error");
+      return;
+    } else {
+      actName = hospitalFormActType;
+    }
+
+    // Validaciones según flags
+    if (hospitalFormSupportsRoles) {
+      // Si supports_roles = true, unit_value_principal y unit_value_assistant son obligatorios
+      if (!hospitalFormUnitValuePrincipal.trim() || !hospitalFormUnitValueAssistant.trim()) {
+        toast.showToast("Si el acto tiene rol, debés definir valor principal y ayudante", "error");
+        return;
+      }
+      const principalValue = parseFloat(hospitalFormUnitValuePrincipal);
+      const assistantValue = parseFloat(hospitalFormUnitValueAssistant);
+      if (isNaN(principalValue) || principalValue <= 0) {
+        toast.showToast("El valor principal debe ser un número mayor a 0", "error");
+        return;
+      }
+      if (isNaN(assistantValue) || assistantValue <= 0) {
+        toast.showToast("El valor ayudante debe ser un número mayor a 0", "error");
+        return;
+      }
+    } else if (hospitalFormUnitType === "hours") {
+      // Si supports_roles = false y unit_type = 'hours', unit_value puede ser null o > 0
+      if (hospitalFormUnitValue.trim()) {
+        const value = parseFloat(hospitalFormUnitValue);
+        if (isNaN(value) || value <= 0) {
+          toast.showToast("El valor debe ser un número mayor a 0", "error");
+          return;
+        }
+      }
+    } else {
+      // Si supports_roles = false y unit_type = 'units', validar unit_value si se ingresó
+      if (hospitalFormUnitValue.trim()) {
+        const value = parseFloat(hospitalFormUnitValue);
+        if (isNaN(value) || value <= 0) {
+          toast.showToast("El valor debe ser un número mayor a 0", "error");
+          return;
+        }
+      }
+    }
+
+    // Agregar acto a la lista
+    setHospitalFormActs([
+      ...hospitalFormActs,
+      {
+        actType: hospitalFormActType,
+        customActName: hospitalFormCustomActName,
+        unitType: hospitalFormUnitType,
+        unitValue: hospitalFormUnitValue,
+        requiresPatients: hospitalFormRequiresPatients,
+        supportsRoles: hospitalFormSupportsRoles,
+        unitValuePrincipal: hospitalFormUnitValuePrincipal,
+        unitValueAssistant: hospitalFormUnitValueAssistant,
+      },
+    ]);
+
+    // Limpiar formulario
+    setHospitalFormActType("");
+    setHospitalFormCustomActName("");
+    setHospitalFormUnitType("hours");
+    setHospitalFormUnitValue("");
+    setHospitalFormRequiresPatients(false);
+    setHospitalFormSupportsRoles(false);
+    setHospitalFormUnitValuePrincipal("");
+    setHospitalFormUnitValueAssistant("");
+    setShowAddActInHospitalForm(false);
+    
+    toast.showToast("Acto agregado a la lista", "success");
+  }
+
+  function removeActFromHospitalForm(index: number) {
+    setHospitalFormActs(hospitalFormActs.filter((_, i) => i !== index));
   }
 
   async function createCustomHospital() {
@@ -314,12 +434,14 @@ export default function DashboardPage() {
       }
 
       // Crear la relación en user_hospitals
-      const { error: insertError } = await supabase
+      const { data: newUserHospital, error: insertError } = await supabase
         .from("user_hospitals")
         .insert({
           user_id: user.id,
           catalog_hospital_id: newHospital.id,
-        });
+        })
+        .select()
+        .single();
 
       if (insertError) {
         toast.showToast("Error al agregar hospital: " + insertError.message, "error");
@@ -327,8 +449,60 @@ export default function DashboardPage() {
         return;
       }
 
+      if (!newUserHospital) {
+        toast.showToast("Error: No se pudo crear la relación con el hospital", "error");
+        return;
+      }
+
+      // Crear actos médicos si se agregaron en el formulario
+      if (hospitalFormActs.length > 0) {
+        const actsToInsert = hospitalFormActs.map((act) => {
+          // Determinar nombre del acto
+          const actName = act.actType === "other" ? act.customActName.trim() : act.actType;
+
+          // Preparar datos para insertar
+          const insertData: any = {
+            user_id: user.id,
+            user_hospital_id: newUserHospital.id,
+            name: actName,
+            unit_type: act.unitType,
+            requires_patients: act.requiresPatients,
+            supports_roles: act.supportsRoles,
+            is_active: true,
+            sort_order: 0,
+          };
+
+          // Si supports_roles = true, usar unit_value_principal y unit_value_assistant
+          if (act.supportsRoles) {
+            insertData.unit_value_principal = parseFloat(act.unitValuePrincipal);
+            insertData.unit_value_assistant = parseFloat(act.unitValueAssistant);
+            insertData.unit_value = null;
+          } else {
+            // Si supports_roles = false, usar unit_value (puede ser null)
+            insertData.unit_value = act.unitValue.trim() ? parseFloat(act.unitValue) : null;
+            insertData.unit_value_principal = null;
+            insertData.unit_value_assistant = null;
+          }
+
+          return insertData;
+        });
+
+        const { error: actsError } = await supabase
+          .from("medical_acts")
+          .insert(actsToInsert);
+
+        if (actsError) {
+          console.error("Error al crear actos:", actsError);
+          // No fallar completamente, solo mostrar advertencia
+          toast.showToast("Hospital creado, pero hubo un error al crear algunos actos", "error");
+        }
+      }
+
       // Éxito: mostrar mensaje y refrescar
-      toast.showToast("Hospital creado y agregado", "success");
+      const actsMessage = hospitalFormActs.length > 0 
+        ? `Hospital creado y agregado con ${hospitalFormActs.length} acto${hospitalFormActs.length > 1 ? 's' : ''}`
+        : "Hospital creado y agregado";
+      toast.showToast(actsMessage, "success");
 
       // Refrescar lista de hospitales
       await loadHospitalsAndActs(user.id);
@@ -337,6 +511,8 @@ export default function DashboardPage() {
       setCustomHospitalName("");
       setCustomHospitalClosingDay("");
       setCustomHospitalEmail("");
+      setHospitalFormActs([]);
+      setShowAddActInHospitalForm(false);
       setShowCustomHospitalForm(false);
     } catch (err: any) {
       // Capturar errores inesperados
@@ -962,7 +1138,8 @@ export default function DashboardPage() {
                 const isFormOpen = openFormFor === hospitalData.id;
                 const isSaving = saving === hospitalData.id;
 
-                const isExpanded = expandedHospitals.has(hospitalData.id);
+                // Contenido siempre visible (expandido por defecto)
+                const isExpanded = true; // Siempre expandido para que el conteo/botón tenga sentido
                 const hospitalSections = expandedSections[hospitalData.id] || { groups: false, acts: false };
 
                 return (
@@ -984,30 +1161,23 @@ export default function DashboardPage() {
                             </div>
                           )}
                         </div>
-                        <button
-                          onClick={() => {
-                            const newExpanded = new Set(expandedHospitals);
-                            if (isExpanded) {
-                              newExpanded.delete(hospitalData.id);
-                            } else {
-                              newExpanded.add(hospitalData.id);
-                            }
-                            setExpandedHospitals(newExpanded);
-                          }}
-                          className="text-gray-600 hover:text-gray-900 transition-colors flex-shrink-0 ml-2"
-                          title={isExpanded ? "Colapsar" : "Expandir"}
-                        >
-                          <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            className={`h-5 w-5 transition-transform ${isExpanded ? "rotate-180" : ""}`}
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
+                        {/* Conteo de actos o botón para agregar acto - siempre visible */}
+                        {acts.length > 0 ? (
+                          <div className="text-sm text-gray-700 flex-shrink-0 ml-2">
+                            {acts.length} acto{acts.length !== 1 ? 's' : ''} médico{acts.length !== 1 ? 's' : ''}
+                          </div>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAddForm(hospitalData.id);
+                            }}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-medium flex-shrink-0 ml-2 whitespace-nowrap"
+                            title="Agregar acto médico"
                           >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                          </svg>
-                        </button>
+                            + Acto médico
+                          </button>
+                        )}
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
@@ -1508,6 +1678,16 @@ export default function DashboardPage() {
                           setCustomHospitalName("");
                           setCustomHospitalClosingDay("");
                           setCustomHospitalEmail("");
+                          setHospitalFormActs([]);
+                          setShowAddActInHospitalForm(false);
+                          setHospitalFormActType("");
+                          setHospitalFormCustomActName("");
+                          setHospitalFormUnitType("hours");
+                          setHospitalFormUnitValue("");
+                          setHospitalFormRequiresPatients(false);
+                          setHospitalFormSupportsRoles(false);
+                          setHospitalFormUnitValuePrincipal("");
+                          setHospitalFormUnitValueAssistant("");
                         }}
                         className="text-gray-500 hover:text-gray-700 transition-colors"
                         disabled={creatingCustomHospital}
@@ -1562,6 +1742,233 @@ export default function DashboardPage() {
                           disabled={creatingCustomHospital}
                         />
                       </div>
+
+                      {/* Sección opcional para agregar actos médicos */}
+                      <div className="pt-4 border-t border-gray-300">
+                        <div className="flex items-center justify-between mb-3">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Actos médicos (opcional)
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => setShowAddActInHospitalForm(!showAddActInHospitalForm)}
+                            disabled={creatingCustomHospital}
+                            className="text-sm text-blue-600 hover:text-blue-700 font-medium disabled:opacity-60"
+                          >
+                            {showAddActInHospitalForm ? "Ocultar" : "+ Agregar acto"}
+                          </button>
+                        </div>
+
+                        {/* Lista de actos agregados */}
+                        {hospitalFormActs.length > 0 && (
+                          <div className="mb-3 space-y-2">
+                            {hospitalFormActs.map((act, index) => {
+                              const actName = act.actType === "other" ? act.customActName : act.actType;
+                              return (
+                                <div
+                                  key={index}
+                                  className="flex items-center justify-between p-2 bg-white rounded border border-gray-200"
+                                >
+                                  <span className="text-sm text-gray-700">{actName}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeActFromHospitalForm(index)}
+                                    disabled={creatingCustomHospital}
+                                    className="text-red-600 hover:text-red-700 text-sm font-medium disabled:opacity-60"
+                                  >
+                                    Eliminar
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Formulario para agregar acto */}
+                        {showAddActInHospitalForm && (
+                          <div className="p-3 bg-white rounded-lg border border-gray-200 space-y-3">
+                            {/* Tipo de acto */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Tipo de acto
+                              </label>
+                              <select
+                                value={hospitalFormActType}
+                                onChange={(e) => {
+                                  setHospitalFormActType(e.target.value);
+                                  setHospitalFormCustomActName("");
+                                }}
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                disabled={creatingCustomHospital}
+                              >
+                                <option value="">Seleccioná...</option>
+                                <option value="Guardia">Guardia</option>
+                                <option value="Consulta">Consulta</option>
+                                <option value="Cirugía">Cirugía</option>
+                                <option value="Cesárea">Cesárea</option>
+                                <option value="other">Otro…</option>
+                              </select>
+                            </div>
+
+                            {/* Nombre personalizado si es "Otro..." */}
+                            {hospitalFormActType === "other" && (
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Nombre del acto
+                                </label>
+                                <input
+                                  type="text"
+                                  value={hospitalFormCustomActName}
+                                  onChange={(e) => setHospitalFormCustomActName(e.target.value)}
+                                  placeholder="Ej: Parto"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  disabled={creatingCustomHospital}
+                                />
+                              </div>
+                            )}
+
+                            {/* Tipo de registro */}
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Tipo de registro
+                              </label>
+                              <select
+                                value={hospitalFormUnitType}
+                                onChange={(e) =>
+                                  setHospitalFormUnitType(e.target.value as "hours" | "units")
+                                }
+                                className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                disabled={creatingCustomHospital}
+                              >
+                                <option value="hours">Horas</option>
+                                <option value="units">Cantidad</option>
+                              </select>
+                            </div>
+
+                            {/* Checkbox: Requiere pacientes */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="hospitalFormRequiresPatients"
+                                checked={hospitalFormRequiresPatients}
+                                onChange={(e) => setHospitalFormRequiresPatients(e.target.checked)}
+                                disabled={creatingCustomHospital}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <label htmlFor="hospitalFormRequiresPatients" className="text-sm text-gray-700 cursor-pointer">
+                                Requiere pacientes
+                              </label>
+                            </div>
+
+                            {/* Checkbox: Tiene rol (principal/ayudante) */}
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="checkbox"
+                                id="hospitalFormSupportsRoles"
+                                checked={hospitalFormSupportsRoles}
+                                onChange={(e) => {
+                                  setHospitalFormSupportsRoles(e.target.checked);
+                                  if (!e.target.checked) {
+                                    setHospitalFormUnitValuePrincipal("");
+                                    setHospitalFormUnitValueAssistant("");
+                                  }
+                                }}
+                                disabled={creatingCustomHospital}
+                                className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                              />
+                              <label htmlFor="hospitalFormSupportsRoles" className="text-sm text-gray-700 cursor-pointer">
+                                Tiene rol (principal/ayudante)
+                              </label>
+                            </div>
+
+                            {/* Si supports_roles = true: mostrar inputs para valores de roles */}
+                            {hospitalFormSupportsRoles && (
+                              <>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Valor principal <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={hospitalFormUnitValuePrincipal}
+                                    onChange={(e) => setHospitalFormUnitValuePrincipal(e.target.value)}
+                                    placeholder="Ej: 1500"
+                                    step="0.01"
+                                    min="0"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    disabled={creatingCustomHospital}
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Valor ayudante <span className="text-red-500">*</span>
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={hospitalFormUnitValueAssistant}
+                                    onChange={(e) => setHospitalFormUnitValueAssistant(e.target.value)}
+                                    placeholder="Ej: 750"
+                                    step="0.01"
+                                    min="0"
+                                    className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                    disabled={creatingCustomHospital}
+                                  />
+                                </div>
+                              </>
+                            )}
+
+                            {/* Si supports_roles = false: mostrar input para unit_value (opcional) */}
+                            {!hospitalFormSupportsRoles && (
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Valor por {hospitalFormUnitType === "hours" ? "hora" : "cantidad"} {hospitalFormUnitType === "hours" ? "(opcional)" : ""}
+                                </label>
+                                <input
+                                  type="number"
+                                  value={hospitalFormUnitValue}
+                                  onChange={(e) => setHospitalFormUnitValue(e.target.value)}
+                                  placeholder="Ej: 1500"
+                                  step="0.01"
+                                  min="0"
+                                  className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm outline-none text-gray-900 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                  disabled={creatingCustomHospital}
+                                />
+                              </div>
+                            )}
+
+                            {/* Botones */}
+                            <div className="flex gap-2 pt-2">
+                              <button
+                                type="button"
+                                onClick={addActToHospitalForm}
+                                disabled={creatingCustomHospital}
+                                className="flex-1 rounded-lg bg-blue-600 text-white px-3 py-2 text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-60"
+                              >
+                                Agregar a la lista
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowAddActInHospitalForm(false);
+                                  setHospitalFormActType("");
+                                  setHospitalFormCustomActName("");
+                                  setHospitalFormUnitType("hours");
+                                  setHospitalFormUnitValue("");
+                                  setHospitalFormRequiresPatients(false);
+                                  setHospitalFormSupportsRoles(false);
+                                  setHospitalFormUnitValuePrincipal("");
+                                  setHospitalFormUnitValueAssistant("");
+                                }}
+                                disabled={creatingCustomHospital}
+                                className="px-3 py-2 rounded-lg border border-gray-300 text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-60"
+                              >
+                                Cancelar
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
                       <button
                         onClick={createCustomHospital}
                         disabled={creatingCustomHospital || !customHospitalName.trim()}
