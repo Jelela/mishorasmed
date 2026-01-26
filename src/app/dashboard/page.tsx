@@ -225,58 +225,95 @@ export default function DashboardPage() {
   }
 
   async function createCustomHospital() {
+    // Obtener usuario autenticado primero
     const {
       data: { user },
+      error: authError,
     } = await supabase.auth.getUser();
-    if (!user) {
-      toast.showToast("No estás autenticado", "error");
+
+    if (authError || !user) {
+      toast.showToast("Tenés que iniciar sesión", "error");
       return;
     }
 
+    // Validar nombre (requerido)
     if (!customHospitalName.trim()) {
       toast.showToast("El nombre del hospital es requerido", "error");
       return;
     }
 
     // Validar día de cierre si se ingresó
+    let closingDay: number | null = null;
     if (customHospitalClosingDay.trim()) {
-      const closingDay = parseInt(customHospitalClosingDay);
-      if (isNaN(closingDay) || closingDay < 1 || closingDay > 31) {
+      const parsed = parseInt(customHospitalClosingDay.trim());
+      if (isNaN(parsed) || parsed < 1 || parsed > 31) {
         toast.showToast("El día de cierre debe ser un número entre 1 y 31", "error");
         return;
       }
+      closingDay = parsed;
     }
+    // NOTA: Si closingDay es null pero la columna tiene NOT NULL,
+    // necesitarás ajustar la BD para permitir NULL o agregar un default
 
     // Validar email si se ingresó
+    let emailValue: string | null = null;
     if (customHospitalEmail.trim()) {
+      const trimmedEmail = customHospitalEmail.trim();
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-      if (!emailRegex.test(customHospitalEmail.trim())) {
+      if (!emailRegex.test(trimmedEmail)) {
         toast.showToast("El email no es válido", "error");
         return;
       }
+      emailValue = trimmedEmail;
+    }
+
+    // Evitar doble submit
+    if (creatingCustomHospital) {
+      return;
     }
 
     setCreatingCustomHospital(true);
 
     try {
+      // Construir objeto de inserción
+      // Si closing_day no se especifica, usar 1 como valor por defecto
+      const insertData: {
+        name: string;
+        created_by: string;
+        closing_day: number;
+        to_email_default?: string | null;
+      } = {
+        name: customHospitalName.trim(),
+        created_by: user.id, // Requerido por RLS
+        closing_day: closingDay ?? 1, // Usar 1 como valor por defecto si no se especifica
+      };
+
+      // Incluir to_email_default solo si tiene valor
+      if (emailValue !== null) {
+        insertData.to_email_default = emailValue;
+      }
+
       // Crear hospital personalizado en el catálogo
+      // IMPORTANTE: Incluir created_by para cumplir con RLS
       const { data: newHospital, error: createError } = await supabase
         .from("hospital_catalog")
-        .insert({
-          name: customHospitalName.trim(),
-          closing_day: customHospitalClosingDay.trim() ? parseInt(customHospitalClosingDay) : null,
-          to_email_default: customHospitalEmail.trim() || null,
-          notes: null,
-        })
+        .insert(insertData)
         .select()
         .single();
 
       if (createError) {
+        // Mostrar el error real, especialmente si es RLS
         toast.showToast("Error al crear hospital: " + createError.message, "error");
+        console.error("Error al crear hospital:", createError);
         return;
       }
 
-      // Agregar automáticamente a user_hospitals
+      if (!newHospital) {
+        toast.showToast("Error: No se pudo crear el hospital", "error");
+        return;
+      }
+
+      // Crear la relación en user_hospitals
       const { error: insertError } = await supabase
         .from("user_hospitals")
         .insert({
@@ -286,18 +323,26 @@ export default function DashboardPage() {
 
       if (insertError) {
         toast.showToast("Error al agregar hospital: " + insertError.message, "error");
+        console.error("Error al agregar hospital:", insertError);
         return;
       }
 
-      toast.showToast("Hospital personalizado creado y agregado correctamente", "success");
+      // Éxito: mostrar mensaje y refrescar
+      toast.showToast("Hospital creado y agregado", "success");
 
-      // Refrescar lista
+      // Refrescar lista de hospitales
       await loadHospitalsAndActs(user.id);
 
-      // Cerrar modal después de un breve delay
-      setTimeout(() => {
-        closeAddHospitalModal();
-      }, 1000);
+      // Limpiar formulario y cerrar modal
+      setCustomHospitalName("");
+      setCustomHospitalClosingDay("");
+      setCustomHospitalEmail("");
+      setShowCustomHospitalForm(false);
+    } catch (err: any) {
+      // Capturar errores inesperados
+      const errorMessage = err?.message || "Error inesperado al crear el hospital";
+      toast.showToast("Error: " + errorMessage, "error");
+      console.error("Error inesperado:", err);
     } finally {
       setCreatingCustomHospital(false);
     }
